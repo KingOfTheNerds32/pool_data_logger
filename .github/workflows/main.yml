@@ -20,7 +20,7 @@ jobs:
           python-version: '3.9'
 
       - name: Install Dependencies
-        run: pip install pandas iaqualink pytz
+        run: pip install pandas pytz iaqualink==0.6.0 --force-reinstall
 
       - name: Run Pool Scraper
         env:
