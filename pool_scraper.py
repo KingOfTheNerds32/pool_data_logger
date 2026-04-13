@@ -5,7 +5,6 @@ from datetime import datetime
 import os
 import pytz
 from iaqualink.client import AqualinkClient
-import json
 
 async def harvest_pool_data():
     # Credentials from GitHub Secrets
@@ -13,31 +12,26 @@ async def harvest_pool_data():
     PASSWORD = os.environ.get('IQUALINK_PASS')
 
     async with AqualinkClient(USERNAME, PASSWORD) as client:
+        # 1. INITIALIZE CONNECTION
         systems = await client.get_systems()
-        if not systems: return
+        if not systems:
+            print("Login failed or no systems found.")
+            return
+            
         system = list(systems.values())[0]
         await system.update()
         
-        # 1. ACCESS RAW HOME DATA (Where the Heat Mode lives)
-        # We reach into the session to get the flattened home data
-        session = system._session
-        home_data = await session.get_home(system.serial)
+        # 2. FETCH DEEP STATUS (For Heat Pump mode)
+        # We reach through the client's session to get the 'home' data
+        serial = system.serial
+        home_data = await client.session.get_home(serial)
         
-        # This function flattens the nested JSON so we can find 'pool_heat_mode'
-        def flatten(obj, prefix=""):
-            items = {}
-            if isinstance(obj, dict):
-                for k, v in obj.items():
-                    full_key = f"{prefix}.{k}" if prefix else k
-                    items.update(flatten(v, full_key))
-            else:
-                items[prefix] = obj
-            return items
+        # Pulling the integer modes identified by your teammate
+        # 0=Off, 1=Gas, 2=Solar, 3=Heat Pump
+        raw_home = home_data.get('home', {})
+        pool_mode_int = raw_home.get('pool_heat_mode', 0)
+        spa_mode_int = raw_home.get('spa_heat_mode', 0)
 
-        flat_data = flatten(home_data)
-
-        # 2. EXTRACT HEATER MODES
-        # Logic: 0=Off, 1=Gas, 2=Solar, 3=Heat Pump
         def decode_heat_mode(val):
             mapping = {0: "OFF", 1: "GAS", 2: "SOLAR", 3: "HEAT PUMP"}
             try:
@@ -45,10 +39,7 @@ async def harvest_pool_data():
             except:
                 return "OFF"
 
-        pool_mode_raw = flat_data.get("pool_heat_mode") or flat_data.get("home.pool_heat_mode")
-        spa_mode_raw = flat_data.get("spa_heat_mode") or flat_data.get("home.spa_heat_mode")
-
-        # 3. CAPTURE STANDARD DEVICES
+        # 3. CAPTURE DEVICE STATES
         row_data = {dev_id: device.state for dev_id, device in system.devices.items()}
         now = datetime.now(pytz.timezone('America/Los_Angeles'))
 
@@ -62,25 +53,32 @@ async def harvest_pool_data():
             'pool_temp': row_data.get('pool_temp', 'N/A'),
             'pool_set_point': row_data.get('pool_set_point', 'N/A'),
             'filter_pump': clean_binary(row_data.get('pool_pump')),
-            # This is the NEW logic you found!
-            'active_heat_source': decode_heat_mode(pool_mode_raw),
-            'spa_heat_source': decode_heat_mode(spa_mode_raw),
-            # Standard toggles
+            # MAPPING THE HEATER SOURCE
+            'active_heat_source': decode_heat_mode(pool_mode_int),
+            'spa_heat_source': decode_heat_mode(spa_mode_int),
             'gas_heater_enabled': clean_binary(row_data.get('pool_heater')),
+            # EQUIPMENT
             'pool_light': clean_binary(row_data.get('aux_1')),
-            'spillover': clean_binary(row_data.get('aux_3'))
+            'spillover': clean_binary(row_data.get('aux_3')),
+            'jet_pump': clean_binary(row_data.get('aux_4'))
         }
 
         # 5. SAVE TO CSV
         df = pd.DataFrame([final_row])
         file_path = 'pool_history.csv'
+        
         if not os.path.exists(file_path):
             df.to_csv(file_path, index=False)
         else:
-            existing_df = pd.read_csv(file_path)
-            pd.concat([existing_df, df], ignore_index=True).to_csv(file_path, index=False)
+            try:
+                existing_df = pd.read_csv(file_path)
+                # Concat ensures we preserve existing data even if columns expand
+                pd.concat([existing_df, df], ignore_index=True).to_csv(file_path, index=False)
+            except:
+                df.to_csv(file_path, index=False)
         
-        print(f"[{now.strftime('%H:%M')}] Logged. Mode: {final_row['active_heat_source']} | Pool: {final_row['pool_temp']}F")
+        print(f"[{now.strftime('%H:%M')}] Logged Successfully.")
+        print(f"Pool: {final_row['pool_temp']}F | Mode: {final_row['active_heat_source']}")
 
 if __name__ == "__main__":
     asyncio.run(harvest_pool_data())
