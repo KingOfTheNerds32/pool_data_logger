@@ -13,49 +13,50 @@ async def harvest_pool_data():
     async with AqualinkClient(USERNAME, PASSWORD) as client:
         systems = await client.get_systems()
         if not systems: return
-
         system = list(systems.values())[0]
         await system.update()
         
-        pacific_tz = pytz.timezone('America/Los_Angeles')
-        now = datetime.now(pacific_tz)
+        # 1. THE HUNTER: Look for "Heat Pump" in every hidden property
+        print("--- SEARCHING FOR HEAT PUMP STATE ---")
+        # Check raw JSON data from Jandy
+        raw_data = system.data
+        for key, value in raw_data.items():
+            if 'heat' in key.lower() or 'pump' in key.lower() or 'hp' in key.lower():
+                print(f"FOUND IN DATA: {key} = {value}")
 
-        # 1. DEEP AUDIT: Print all system attributes to find the Heat Pump
-        print(f"--- SYSTEM DEEP AUDIT @ {now.strftime('%H:%M')} ---")
-        # This looks for hidden properties like 'heater_priority' or 'heat_pump'
-        for attr in dir(system):
-            if not attr.startswith('_'): # Ignore internal python stuff
-                try:
-                    value = getattr(system, attr)
-                    if not callable(value): # Only print data, not functions
-                        print(f"ATTR: {attr:20} | VALUE: {value}")
-                except:
-                    continue
-        print("--- END AUDIT ---")
+        # Check for specific heater attributes
+        for attr in ['heater_mode', 'heater_state', 'heat_pump', 'hot_button']:
+            if hasattr(system, attr):
+                print(f"FOUND ATTR: {attr} = {getattr(system, attr)}")
+        print("--- END SEARCH ---")
 
-        # 2. BRUTE FORCE DEVICE LOG
-        row = {'timestamp': now.strftime("%Y-%m-%d %H:%M:%S")}
-        for dev_id, device in system.devices.items():
-            # We log the RAW value this time to see if it's something other than 0 or 1
-            val = device.state
-            row[dev_id] = "OFF" if (val == '0' or val == 0 or val == "") else ("ON" if (val == '1' or val == 1) else val)
+        # 2. THE LOGGER
+        row_data = {dev_id: device.state for dev_id, device in system.devices.items()}
+        now = datetime.now(pytz.timezone('America/Los_Angeles'))
 
-        # 3. ROBUST CSV SAVE
-        df_new = pd.DataFrame([row])
+        def clean(val):
+            if val is None or str(val).strip() == "": return "OFF"
+            return "ON" if str(val) == "1" else ("OFF" if str(val) == "0" else val)
+
+        final_row = {
+            'timestamp': now.strftime("%Y-%m-%d %H:%M:%S"),
+            'pool_temp': row_data.get('pool_temp', 'N/A'),
+            'air_temp': row_data.get('air_temp', 'N/A'),
+            'pool_set_point': row_data.get('pool_set_point', 'N/A'),
+            'gas_heater': clean(row_data.get('pool_heater')),
+            'filter_pump': clean(row_data.get('pool_pump')),
+            # We will use this to see if any unknown ID is actually the HP
+            'hp_id_mystery': clean(row_data.get('aux_EA')) 
+        }
+
+        # Save to CSV
+        df = pd.DataFrame([final_row])
         file_path = 'pool_history.csv'
-        
-        if not os.path.exists(file_path) or os.stat(file_path).st_size == 0:
-            df_new.to_csv(file_path, index=False)
+        if not os.path.exists(file_path):
+            df.to_csv(file_path, index=False)
         else:
-            try:
-                existing_df = pd.read_csv(file_path)
-                # If you added new devices, this ensures the columns align
-                combined = pd.concat([existing_df, df_new], ignore_index=True)
-                combined.to_csv(file_path, index=False)
-            except pd.errors.EmptyDataError:
-                df_new.to_csv(file_path, index=False)
-        
-        print(f"\nSUCCESS: Logged {len(row)} data points to CSV.")
+            existing_df = pd.read_csv(file_path)
+            pd.concat([existing_df, df], ignore_index=True).to_csv(file_path, index=False)
 
 if __name__ == "__main__":
     asyncio.run(harvest_pool_data())
