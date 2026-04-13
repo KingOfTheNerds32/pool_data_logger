@@ -18,23 +18,28 @@ async def harvest_pool_data():
         system = list(systems.values())[0]
         await system.update()
         
-        # 1. FETCH DEEP STATUS (The 'Teammate' Fix)
-        # In 0.6.0, get_devices_list returns the raw JSON from the Jandy 'home' endpoint
-        home_data = await system.get_devices_list()
-        
-        # Logic from your team: 0=Off, 1=Gas, 2=Solar, 3=Heat Pump
-        # We check both possible nesting locations in the JSON
-        pool_mode_int = home_data.get('pool_heat_mode', home_data.get('home', {}).get('pool_heat_mode', 0))
-        spa_mode_int = home_data.get('spa_heat_mode', home_data.get('home', {}).get('spa_heat_mode', 0))
+        # 1. DECODE HEATER MODES (The "Team" Fix)
+        # We look into the raw data of the thermostat devices
+        def get_mode(dev_id):
+            dev = system.devices.get(dev_id)
+            if dev and hasattr(dev, 'data'):
+                # In many Jandy configs, the mode is in the raw 'state' 
+                # or a 'sp_mode' / 'pool_heat_mode' field in the data dict
+                raw_data = dev.data
+                return raw_data.get('pool_heat_mode', raw_data.get('spa_heat_mode', 0))
+            return 0
+
+        pool_mode_raw = get_mode('pool_set_point')
+        spa_mode_raw = get_mode('spa_set_point')
 
         def decode_heat_mode(val):
             mapping = {0: "OFF", 1: "GAS", 2: "SOLAR", 3: "HEAT PUMP"}
             try:
                 return mapping.get(int(val), f"UNKNOWN ({val})")
-            except (ValueError, TypeError):
+            except:
                 return "OFF"
 
-        # 2. STANDARD DEVICE STATES
+        # 2. CAPTURE STANDARD STATES
         row_data = {dev_id: device.state for dev_id, device in system.devices.items()}
         now = datetime.now(pytz.timezone('America/Los_Angeles'))
 
@@ -48,10 +53,9 @@ async def harvest_pool_data():
             'air_temp': row_data.get('air_temp', 'N/A'),
             'pool_set_point': row_data.get('pool_set_point', 'N/A'),
             'filter_pump': clean_binary(row_data.get('pool_pump')),
-            # THIS IS THE HEAT PUMP TRACKER
-            'active_heat_source': decode_heat_mode(pool_mode_int),
-            'spa_heat_source': decode_heat_mode(spa_mode_int),
-            'gas_heater_mode': clean_binary(row_data.get('pool_heater')),
+            # HEATER SOURCE (The specific field we are hunting)
+            'active_heat_source': decode_heat_mode(pool_mode_raw),
+            'gas_heater_enabled': clean_binary(row_data.get('pool_heater')),
             'pool_light': clean_binary(row_data.get('aux_1')),
             'spillover': clean_binary(row_data.get('aux_3'))
         }
@@ -66,8 +70,7 @@ async def harvest_pool_data():
             existing_df = pd.read_csv(file_path)
             pd.concat([existing_df, df], ignore_index=True).to_csv(file_path, index=False)
         
-        print(f"[{now.strftime('%H:%M')}] Logged successfully.")
-        print(f"Pool: {final_row['pool_temp']}F | Heat Source: {final_row['active_heat_source']}")
+        print(f"[{now.strftime('%H:%M')}] Logged. Source: {final_row['active_heat_source']}")
 
 if __name__ == "__main__":
     asyncio.run(harvest_pool_data())
