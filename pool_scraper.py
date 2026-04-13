@@ -33,7 +33,7 @@ async def harvest_pool_data():
         final_row = {
             'timestamp': now.strftime("%Y-%m-%d %H:%M:%S"),
             
-            # Temperatures (Note: iAquaLink often returns empty string if sensor is off)
+            # Temperatures
             'air_temp': row_data.get('air_temp', 'N/A'),
             'pool_temp': row_data.get('pool_temp', 'N/A'),
             'spa_temp': row_data.get('spa_temp', 'N/A'),
@@ -48,14 +48,17 @@ async def harvest_pool_data():
             'pool_heater': on_off(row_data.get('pool_heater')),
             'spa_heater': on_off(row_data.get('spa_heater')),
             'solar_heater': on_off(row_data.get('solar_heater')),
+            'freeze_protection': on_off(row_data.get('freeze_protection')), # Recommended
             
             # Lights & Features
             'pool_light': on_off(row_data.get('aux_1')),
             'spa_light': on_off(row_data.get('aux_2')),
-            'spillover': on_off(row_data.get('aux_3')),
+            'spillover': on_off(row_off(row_data.get('aux_3')),
             'jet_pump': on_off(row_data.get('aux_4')),
             
-            # Chemistry (If active)
+            # System Info & Chemistry
+            'relay_count': row_data.get('relay_count', 'N/A'), # Recommended
+            'chlorinator_present': row_data.get('is_icl_present', 'N/A'), # Recommended
             'ph': row_data.get('ph', 'N/A'),
             'orp': row_data.get('orp', 'N/A'),
             'salinity': row_data.get('pool_salinity', 'N/A')
