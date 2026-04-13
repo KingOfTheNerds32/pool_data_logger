@@ -12,50 +12,50 @@ async def harvest_pool_data():
 
     async with AqualinkClient(USERNAME, PASSWORD) as client:
         systems = await client.get_systems()
-        if not systems:
-            return
+        if not systems: return
 
         system = list(systems.values())[0]
         await system.update()
         
-        # PST Time
         pacific_tz = pytz.timezone('America/Los_Angeles')
         now = datetime.now(pacific_tz)
 
-        # 1. Create a dictionary for the CSV row
+        # 1. DEEP AUDIT: Print all system attributes to find the Heat Pump
+        print(f"--- SYSTEM DEEP AUDIT @ {now.strftime('%H:%M')} ---")
+        # This looks for hidden properties like 'heater_priority' or 'heat_pump'
+        for attr in dir(system):
+            if not attr.startswith('_'): # Ignore internal python stuff
+                try:
+                    value = getattr(system, attr)
+                    if not callable(value): # Only print data, not functions
+                        print(f"ATTR: {attr:20} | VALUE: {value}")
+                except:
+                    continue
+        print("--- END AUDIT ---")
+
+        # 2. BRUTE FORCE DEVICE LOG
         row = {'timestamp': now.strftime("%Y-%m-%d %H:%M:%S")}
-        
-        # 2. Add every device found in discovery to the CSV automatically
         for dev_id, device in system.devices.items():
-            # Clean up the state for the CSV
-            state = device.state
-            if state is None or str(state).strip() == "":
-                state = "OFF"
-            elif str(state) == "1":
-                state = "ON"
-            elif str(state) == "0":
-                state = "OFF"
-            
-            row[dev_id] = state
+            # We log the RAW value this time to see if it's something other than 0 or 1
+            val = device.state
+            row[dev_id] = "OFF" if (val == '0' or val == 0 or val == "") else ("ON" if (val == '1' or val == 1) else val)
 
-        # 3. Check for hidden Heat Pump attributes (v0.6.0 specific)
-        # Some systems store HP state here instead of the device list
-        hp_state = getattr(system, 'heat_pump', 'UNKNOWN')
-        row['hp_internal_state'] = hp_state
-
-        # Save to CSV (This will automatically add new columns if the device list grows)
-        df = pd.DataFrame([row])
+        # 3. ROBUST CSV SAVE
+        df_new = pd.DataFrame([row])
         file_path = 'pool_history.csv'
         
-        # Handle header logic for a dynamic CSV
-        if not os.path.exists(file_path):
-            df.to_csv(file_path, index=False)
+        if not os.path.exists(file_path) or os.stat(file_path).st_size == 0:
+            df_new.to_csv(file_path, index=False)
         else:
-            existing_df = pd.read_csv(file_path)
-            combined = pd.concat([existing_df, df], ignore_index=True)
-            combined.to_csv(file_path, index=False)
+            try:
+                existing_df = pd.read_csv(file_path)
+                # If you added new devices, this ensures the columns align
+                combined = pd.concat([existing_df, df_new], ignore_index=True)
+                combined.to_csv(file_path, index=False)
+            except pd.errors.EmptyDataError:
+                df_new.to_csv(file_path, index=False)
         
-        print(f"[{now.strftime('%I:%M %p')}] Brute-force log complete. {len(row)} data points saved.")
+        print(f"\nSUCCESS: Logged {len(row)} data points to CSV.")
 
 if __name__ == "__main__":
     asyncio.run(harvest_pool_data())
