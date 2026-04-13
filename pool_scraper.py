@@ -26,8 +26,7 @@ import sys
 from typing import Any
 
 import aiohttp
-import iaqualink
-from iaqualink import AqualinkClient
+from iaqualink.client import AqualinkClient
 from iaqualink.session import AqualinkSession
 
 
@@ -143,8 +142,8 @@ async def run_diagnostic() -> None:
 
     _print_section("1 / 5  –  Connecting to iAqualink")
     async with aiohttp.ClientSession() as http_session:
-        client = AqualinkClient(USERNAME, PASSWORD, http_session)
-        await client.login()
+        client = AqualinkClient(http_session)
+        await client.login(USERNAME, PASSWORD)
         print("  ✓ Logged in")
 
         # ── Pick the target system ──────────────────────────────────────────
@@ -303,8 +302,8 @@ class HeatPumpReader:
 
     async def connect(self) -> None:
         self._http = aiohttp.ClientSession()
-        self._client = AqualinkClient(self.username, self.password, self._http)
-        await self._client.login()
+        self._client = AqualinkClient(self._http)
+        await self._client.login(self.username, self.password)
 
         systems = await self._client.get_systems()
         if self.serial:
