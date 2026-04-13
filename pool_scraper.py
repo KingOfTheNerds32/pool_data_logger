@@ -55,7 +55,7 @@ async def harvest_pool_data():
         # SAVE TO CSV
         df = pd.DataFrame([final_row])
         file_path = 'pool_history.csv'
-        df.to_csv(file_path, mode='a', header=not os.path.exists(file_path), index=False)
+        # df.to_csv(file_path, mode='a', header=not os.path.exists(file_path), index=False)
         print(f"Success! Logged {final_row['pool_temp']}°F at {now.strftime('%I:%M %p')} PT")
 
 if __name__ == "__main__":
