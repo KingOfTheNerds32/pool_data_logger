@@ -4,59 +4,59 @@ import pandas as pd
 from datetime import datetime
 import os
 import pytz
+# In 0.6.0, we have to import the specific Client class like this:
+from iaqualink.client import AqualinkClient
 
 async def harvest_pool_data():
-    # Credentials from GitHub Secrets
     USERNAME = os.environ.get('IQUALINK_USER')
     PASSWORD = os.environ.get('IQUALINK_PASS')
 
-    # 1. Newest Entry Point: iaqualink.Aqualink
-    async with iaqualink.Aqualink(USERNAME, PASSWORD) as client:
+    # Initialize the client using the explicit class
+    async with AqualinkClient(USERNAME, PASSWORD) as client:
         systems = await client.get_systems()
         
         if not systems:
-            print("No pool systems found. Check credentials or iAquaLink server status.")
+            print("Login successful, but no systems found.")
             return
 
-        # Pick the first system
         system = list(systems.values())[0]
+        await system.update()
         
-        # 2. DISCOVERY: This will list all your devices in the GitHub Action Logs
-        print(f"--- DEVICE DISCOVERY FOR {system.name} ---")
-        await system.update() # Refresh the data
-        
-        # We'll store our row data here
+        # --- DISCOVERY LOGGING ---
+        print(f"--- DEVICE DISCOVERY (v0.6.0) ---")
         row_data = {}
-        
-        # This loop prints every device to the log so you can find the names
-        for dev_name, device in system.devices.items():
-            print(f"Device Key: {dev_name} | Label: {device.label} | State: {device.state}")
-            # Map common sensors to our CSV row
-            row_data[dev_name] = device.state
-
+        # In 0.6.0, devices are stored in the .devices dictionary
+        for dev_id, device in system.devices.items():
+            print(f"ID: {dev_id:20} | Label: {device.label:20} | State: {device.state}")
+            row_data[dev_id] = device.state
         print("--- END DISCOVERY ---\n")
 
-        # 3. Handle Time (PST/PDT)
+        # --- TIMEZONE (PST) ---
         pacific_tz = pytz.timezone('America/Los_Angeles')
-        now_pacific = datetime.now(pacific_tz)
+        now = datetime.now(pacific_tz)
 
-        # Build the specific CSV row
-        # We use .get() so it doesn't crash if a specific sensor is missing
+        # --- DATA MAPPING ---
+        def clean_state(val):
+            if val is None: return "N/A"
+            s = str(val).lower()
+            if s in ['on', '1', 'true', 'enabled']: return "ON"
+            if s in ['off', '0', 'false', 'disabled']: return "OFF"
+            return val
+
         final_row = {
-            'timestamp': now_pacific.strftime("%Y-%m-%d %H:%M:%S"),
+            'timestamp': now.strftime("%Y-%m-%d %H:%M:%S"),
             'pool_temp': row_data.get('pool_temp', 'N/A'),
-            'spa_temp': row_data.get('spa_temp', 'N/A'),
             'air_temp': row_data.get('air_temp', 'N/A'),
-            'filter_pump': row_data.get('filter_pump', 'N/A'),
-            'heater': row_data.get('pool_heater', 'N/A')
+            'spa_temp': row_data.get('spa_temp', 'N/A'),
+            'filter_pump': clean_state(row_data.get('filter_pump')),
+            'pool_heater': clean_state(row_data.get('pool_heater'))
         }
 
-        # Save to CSV
+        # SAVE TO CSV
         df = pd.DataFrame([final_row])
         file_path = 'pool_history.csv'
         df.to_csv(file_path, mode='a', header=not os.path.exists(file_path), index=False)
-        
-        print(f"Logged: Pool {final_row['pool_temp']}° / Air {final_row['air_temp']}° at {now_pacific.strftime('%I:%M %p')} PT")
+        print(f"Success! Logged {final_row['pool_temp']}°F at {now.strftime('%I:%M %p')} PT")
 
 if __name__ == "__main__":
     asyncio.run(harvest_pool_data())
