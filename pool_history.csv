@@ -1,2 +1,3 @@
 timestamp,air_temp,pool_temp,spa_temp,pool_set_point,spa_set_point,pool_pump,spa_pump,pool_heater,spa_heater,solar_heater,freeze_protection,pool_light,spa_light,spillover,jet_pump,relay_count,chlorinator_present,ph,orp,salinity
 2026-04-13 09:43:36,60,89,,97,98,ON,OFF,OFF,OFF,OFF,OFF,OFF,OFF,OFF,OFF,8,absent,,,
+2026-04-13 09:45:56,60,89,,97,98,ON,OFF,OFF,OFF,OFF,OFF,OFF,OFF,OFF,OFF,8,absent,,,
