@@ -1,0 +1,37 @@
+name: iAquaLink Pool Logger
+on:
+  repository_dispatch:
+    types: [poll-pool]  # Unique event name for the pool
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  scrape_pool:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Install Dependencies
+        run: pip install pandas iaqualink pytz
+
+      - name: Run Pool Scraper
+        env:
+          IQUALINK_USER: ${{ secrets.IQUALINK_USER }}
+          IQUALINK_PASS: ${{ secrets.IQUALINK_PASS }}
+        run: python pool_scraper.py
+
+      - name: Commit and Push Data
+        run: |
+          git config --global user.name "PoolBot"
+          git config --global user.email "poolbot@github.com"
+          git add pool_history.csv
+          git commit -m "Update pool telemetry" || exit 0
+          git push
