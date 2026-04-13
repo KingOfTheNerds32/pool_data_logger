@@ -16,6 +16,9 @@ async def harvest_pool_data():
         pool = list(systems.values())[0]
         await pool.update()
 
+        for device in pool.devices.values():
+            print(f"Device Name: {device.name} | Type: {device.label}")
+        
         # Extract data points
         data = {
             'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
