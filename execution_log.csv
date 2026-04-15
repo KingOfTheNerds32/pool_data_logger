@@ -8,3 +8,4 @@ timestamp,pool_status,weather_status
 2026-04-15 12:35:37,OK,OK
 2026-04-15 12:40:38,OK,OK
 2026-04-15 12:45:27,OK,OK
+2026-04-15 12:50:21,FAIL,OK
