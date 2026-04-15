@@ -3,7 +3,7 @@ from datetime import datetime
 import pytz
 
 # Import the functions from your other files
-from pool_scraper import harvest_pool_data
+from pool_logger import harvest_pool_data
 from weather_logger import harvest_weather_data
 
 async def main():
@@ -13,19 +13,19 @@ async def main():
     
     print(f"Starting telemetry collection for: {unified_ts}")
 
-    # 2. Run Pool Scraper (with error handling)
+    # 2. Run Pool Logger (with error handling)
     try:
-        await run_pool_scrape(unified_ts)
+        await harvest_pool_data(unified_ts)
         print("Successfully logged pool data.")
     except Exception as e:
-        print(f"Pool Scraper failed: {e}")
+        print(f"Pool Logger failed: {e}")
 
-    # 3. Run Weather Scraper (with error handling)
+    # 3. Run Weather Logger (with error handling)
     try:
-        run_weather_scrape(unified_ts)
+        harvest_weather_data(unified_ts)
         print("Successfully logged weather data.")
     except Exception as e:
-        print(f"Weather Scraper failed: {e}")
+        print(f"Weather Logger failed: {e}")
 
 if __name__ == "__main__":
     asyncio.run(main())
