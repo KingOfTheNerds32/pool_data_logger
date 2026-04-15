@@ -3,8 +3,8 @@ from datetime import datetime
 import pytz
 
 # Import the functions from your other files
-from pool_scraper import run_pool_scrape
-from weather_logger import run_weather_scrape
+from pool_scraper import harvest_pool_data
+from weather_logger import harvest_weather_data
 
 async def main():
     # 1. Generate the single "Source of Truth" timestamp
