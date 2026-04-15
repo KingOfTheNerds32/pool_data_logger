@@ -1,14 +1,15 @@
-name: iAquaLink Pool Logger
+name: iAquaLink Pool & Weather Logger
+
 on:
   repository_dispatch:
-    types: [poll-pool]  # Unique event name for the pool
+    types: [poll-pool]
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  scrape_pool:
+  scrape_and_log:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -20,7 +21,8 @@ jobs:
           python-version: '3.12'
 
       - name: Install Dependencies
-        run: pip install pandas pytz aiohttp iaqualink==0.6.0 --force-reinstall
+        # Added 'requests' for the weather scraper
+        run: pip install pandas pytz aiohttp requests iaqualink==0.6.0 --force-reinstall
 
       - name: Run Pool Scraper
         env:
@@ -28,10 +30,18 @@ jobs:
           IQUALINK_PASS: ${{ secrets.IQUALINK_PASS }}
         run: python pool_scraper.py
 
+      - name: Run Weather Scraper
+        env:
+          OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
+          LAT: ${{ secrets.LAT }}
+          LONG: ${{ secrets.LONG }}
+        run: python weather_scraper.py
+
       - name: Commit and Push Data
         run: |
           git config --global user.name "PoolBot"
           git config --global user.email "poolbot@github.com"
-          git add pool_history.csv
-          git commit -m "Update pool telemetry" || exit 0
+          # Added weather_history.csv to the git tracker
+          git add pool_history.csv weather_history.csv
+          git commit -m "Update pool and weather telemetry" || exit 0
           git push
