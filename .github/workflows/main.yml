@@ -22,7 +22,7 @@ jobs:
 
       - name: Install Dependencies
         # Added 'requests' for the weather scraper
-        run: pip install pandas pytz aiohttp requests iaqualink==0.6.0 --force-reinstall
+        run: pip install pandas pytz aiohttp httpx requests iaqualink==0.6.0 --force-reinstall
 
       - name: Run Pool Scraper
         env:
