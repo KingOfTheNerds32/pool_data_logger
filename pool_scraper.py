@@ -11,16 +11,14 @@ async def harvest_pool_data():
     USERNAME = os.environ.get('IQUALINK_USER')
     PASSWORD = os.environ.get('IQUALINK_PASS')
 
-    # 1. Initialize the client normally
-    client = AqualinkClient(USERNAME, PASSWORD)
-    
-    # 2. MANUALLY OVERRIDE THE TIMEOUT
-    # We reach into the underlying httpx client that iaqualink creates 
-    # and set a 60-second timeout to prevent those ReadTimeout errors.
-    client._client.timeout = httpx.Timeout(60.0, connect=60.0)
+    async with AqualinkClient(USERNAME, PASSWORD) as client:
+        # 1. SET TIMEOUT HERE
+        # The internal _client is now initialized, so we can override its timeout.
+        # This gives Jandy's servers 60s to respond to prevent ReadTimeout.
+        client._client.timeout = httpx.Timeout(60.0, connect=60.0)
 
-    async with client:
         try:
+            # 2. LOGIN AND FETCH
             systems = await client.get_systems()
         except Exception as e:
             print(f"Primary login failed: {e}. Retrying in 10s...")
