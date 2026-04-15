@@ -9,6 +9,8 @@ from pool_logger import harvest_pool_data
 from weather_logger import harvest_weather_data
 
 async def main():
+    # 1. SETUP TIMEZONES AND CURRENT TIME
+    # GitHub Runners use UTC by default, so we must be explicit for Rolling Hills Estates (PST)
     pacific_tz = pytz.timezone('America/Los_Angeles')
     now = datetime.now(pacific_tz)
     unified_ts = now.strftime("%Y-%m-%d %H:%M:%S")
@@ -16,33 +18,53 @@ async def main():
     results = {"Pool": False, "Weather": False}
     errors = {"Pool": "", "Weather": ""}
     
-    # --- PART 1: CALCULATE TIME SINCE LAST SYNC ---
+    print(f"Starting telemetry collection for: {unified_ts}")
+
+    # 2. CALCULATE TIME SINCE LAST SUCCESSFUL POOL SYNC
     last_sync_text = "No previous successful sync found"
     status_file = 'execution_log.csv'
     
     if os.path.exists(status_file):
         try:
             df_status = pd.read_csv(status_file)
-            # Find the most recent row where pool_status was 'OK'
-            successes = df_status[df_status['pool_status'] == 'OK']
+            # Filter for rows where pool was OK and timestamp is not null
+            successes = df_status[(df_status['pool_status'] == 'OK') & (df_status['timestamp'].notnull())]
+            
             if not successes.empty:
-                last_ok_str = successes['timestamp'].iloc[-1]
-                last_ok_dt = datetime.strptime(last_ok_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=pacific_tz)
-                diff = now - last_ok_dt
+                # Get the most recent success timestamp
+                last_ok_str = str(successes['timestamp'].iloc[-1])
                 
-                hours, remainder = divmod(int(diff.total_seconds()), 3600)
-                minutes, _ = divmod(remainder, 60)
-                last_sync_text = f"{hours}h {minutes}m ago"
+                # Convert string to naive datetime, then localize to PST
+                naive_dt = datetime.strptime(last_ok_str, "%Y-%m-%d %H:%M:%S")
+                last_ok_dt = pacific_tz.localize(naive_dt)
+                
+                # Calculate difference
+                diff = now - last_ok_dt
+                total_seconds = int(diff.total_seconds())
+                
+                if total_seconds < 60:
+                    last_sync_text = "Just now"
+                else:
+                    hours, remainder = divmod(total_seconds, 3600)
+                    minutes, _ = divmod(remainder, 60)
+                    
+                    parts = []
+                    if hours > 0: parts.append(f"{hours}h")
+                    if minutes > 0: parts.append(f"{minutes}m")
+                    last_sync_text = f"{' '.join(parts)} ago"
         except Exception as e:
             print(f"Metadata lookup failed: {e}")
+            last_sync_text = "Error calculating last sync"
 
-    # --- PART 2: RUN POOL LOGGER (WITH RETRIES) ---
-    for attempt in range(1, 4): # Try 3 times
+    # 3. RUN POOL LOGGER (WITH 3 RETRIES)
+    # This addresses the intermittent iAquaLink ReadTimeout issues
+    for attempt in range(1, 4):
         try:
             print(f"Pool Sync Attempt {attempt}/3...")
             await harvest_pool_data(unified_ts)
             results["Pool"] = True
             errors["Pool"] = "Synchronized"
+            print("Successfully logged pool data.")
             break 
         except Exception as e:
             errors["Pool"] = str(e)
@@ -50,18 +72,18 @@ async def main():
                 print(f"Attempt {attempt} failed: {e}. Retrying in 10s...")
                 await asyncio.sleep(10)
             else:
-                print(f"All 3 pool attempts failed.")
+                print(f"All 3 pool attempts failed. Final error: {e}")
 
-    # --- PART 3: RUN WEATHER LOGGER ---
+    # 4. RUN WEATHER LOGGER
     try:
         harvest_weather_data(unified_ts)
         results["Weather"] = True
+        print("Successfully logged weather data.")
     except Exception as e:
         errors["Weather"] = str(e)
         print(f"Weather Logger failed: {e}")
 
-    # --- PART 4: LOGGING & SUMMARY ---
-    # Log to CSV
+    # 5. LOG TO HISTORICAL EXECUTION CSV
     status_row = {
         'timestamp': unified_ts,
         'pool_status': 'OK' if results["Pool"] else 'FAIL',
@@ -70,15 +92,20 @@ async def main():
     pd.DataFrame([status_row]).to_csv(status_file, mode='a', 
                                      header=not os.path.exists(status_file), index=False)
 
-    # Write to GitHub Step Summary
+    # 6. WRITE GITHUB STEP SUMMARY (MARKDOWN TABLE)
     with open("job_summary.md", "w") as f:
         f.write("## 🚀 Telemetry Run Summary\n")
         f.write(f"**Current Run:** `{unified_ts}`\n")
         f.write(f"**Last Successful Pool Sync:** `{last_sync_text}`\n\n")
         f.write("| Service | Status | Details |\n")
         f.write("| :--- | :--- | :--- |\n")
-        f.write(f"| Pool Data | {'✅ OK' if results['Pool'] else '❌ FAILED'} | {errors['Pool']} |\n")
-        f.write(f"| Weather Data | {'✅ OK' if results['Weather'] else '❌ FAILED'} | {errors['Weather'] if not results['Weather'] else 'Synchronized'} |\n")
+        
+        pool_icon = '✅ OK' if results["Pool"] else '❌ FAILED'
+        f.write(f"| Pool Data | {pool_icon} | {errors['Pool']} |\n")
+        
+        weather_icon = '✅ OK' if results["Weather"] else '❌ FAILED'
+        weather_details = "Synchronized" if results["Weather"] else errors["Weather"]
+        f.write(f"| Weather Data | {weather_icon} | {weather_details} |\n")
 
 if __name__ == "__main__":
     asyncio.run(main())
