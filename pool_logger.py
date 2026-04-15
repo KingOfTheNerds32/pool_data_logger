@@ -78,7 +78,7 @@ async def harvest_pool_data(ts_string):
         file_path = 'pool_history.csv'
         header_needed = not os.path.exists(file_path) or os.stat(file_path).st_size == 0
         df.to_csv(file_path, mode='a', header=header_needed, index=False)
-        print(f"Logged all equipment states at {now.strftime('%I:%M %p')} PT")
+        print(f"Logged all equipment states at {ts_string} PT")
 
 if __name__ == "__main__":
     asyncio.run(harvest_pool_data())
