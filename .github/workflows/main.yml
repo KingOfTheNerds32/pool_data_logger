@@ -33,11 +33,14 @@ jobs:
           LONG: ${{ secrets.LONG }}
         run: python main.py
 
+      - name: Generate Job Summary
+        # This makes the table appear on the Action run page
+        run: cat job_summary.md >> $GITHUB_STEP_SUMMARY
+
       - name: Commit and Push Data
         run: |
           git config --global user.name "PoolBot"
           git config --global user.email "poolbot@github.com"
-          # Added weather_history.csv to the git tracker
-          git add pool_history.csv weather_history.csv
-          git commit -m "Update pool and weather telemetry" || exit 0
+          git add *.csv
+          git commit -m "Telemetry Update: $(date)" || exit 0
           git push
