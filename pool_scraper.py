@@ -10,8 +10,16 @@ async def harvest_pool_data():
     USERNAME = os.environ.get('IQUALINK_USER')
     PASSWORD = os.environ.get('IQUALINK_PASS')
 
-    async with AqualinkClient(USERNAME, PASSWORD) as client:
-        systems = await client.get_systems()
+    from httpx import Timeout
+    timeout = Timeout(60.0, connect=60.0)
+    async with AqualinkClient(USERNAME, PASSWORD, timeout=timeout) as client:
+        try:
+            systems = await client.get_systems()
+        except Exception as e:
+            print(f"Primary login failed: {e}. Retrying in 10s...")
+            await asyncio.sleep(10)
+            systems = await client.get_systems()
+            
         if not systems:
             return
 
