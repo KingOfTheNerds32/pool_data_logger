@@ -7,7 +7,7 @@ import pytz
 import httpx
 from iaqualink.client import AqualinkClient
 
-async def harvest_pool_data():
+async def harvest_pool_data(ts_string):
     USERNAME = os.environ.get('IQUALINK_USER')
     PASSWORD = os.environ.get('IQUALINK_PASS')
 
@@ -34,17 +34,13 @@ async def harvest_pool_data():
         
         row_data = {dev_id: device.state for dev_id, device in system.devices.items()}
 
-        # PST Time
-        pacific_tz = pytz.timezone('America/Los_Angeles')
-        now = datetime.now(pacific_tz)
-
         # Helper to convert 0/1 or "0"/"1" to ON/OFF
         def on_off(val):
             if val is None or val == "": return "OFF"
             return "ON" if str(val) == "1" else "OFF"
 
         final_row = {
-            'timestamp': now.strftime("%Y-%m-%d %H:%M:%S"),
+            'timestamp': ts_string, #shared timestamp passed in
             
             # Temperatures
             'air_temp': row_data.get('air_temp', 'N/A'),
