@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime
 import pytz
 
-def harvest_weather_data():
+def harvest_weather_data(ts_string):
     API_KEY = os.environ.get('OPENWEATHER_API_KEY')
     LAT = os.environ.get('LAT')
     LON = os.environ.get('LONG')
@@ -26,24 +26,24 @@ def harvest_weather_data():
             
             # THE "EVERYTHING" LOG
             weather_row = {
-                'timestamp': now.strftime("%Y-%m-%d %H:%M:%S"),
+                'timestamp': ts_string, #shared timestamp passed in
                 
                 # TEMPERATURE SUITE
                 'temp_actual': data['main'].get('temp'),
-                'temp_feels_like': data['main'].get('feels_like'), # Disney: For comfort levels
+                'temp_feels_like': data['main'].get('feels_like'), 
                 'temp_min': data['main'].get('temp_min'),
                 'temp_max': data['main'].get('temp_max'),
                 
                 # ATMOSPHERIC SUITE
-                'humidity': data['main'].get('humidity'),         # Pool: Vital for Heat Pump COP
+                'humidity': data['main'].get('humidity'),         
                 'pressure': data['main'].get('pressure'),
                 'pressure_sea': data['main'].get('sea_level'),
-                'visibility_meters': data.get('visibility'),      # Solar: Measures "haze"
-                'clouds_percent': data['clouds'].get('all'),      # Solar: Main production factor
+                'visibility_meters': data.get('visibility'),      
+                'clouds_percent': data['clouds'].get('all'),      
                 
                 # WIND SUITE
-                'wind_speed': data['wind'].get('speed'),          # Pool: Main evaporation factor
-                'wind_deg': data['wind'].get('deg'),              # Home: Identifies "wind tunnels"
+                'wind_speed': data['wind'].get('speed'),          
+                'wind_deg': data['wind'].get('deg'),              
                 'wind_gust': data['wind'].get('gust', 0),
                 
                 # PRECIPITATION (Checks if the 'rain' or 'snow' keys exist)
@@ -55,7 +55,7 @@ def harvest_weather_data():
                 'sunset_unix': data['sys'].get('sunset'),
                 
                 # CONDITION CODES
-                'weather_id': data['weather'][0].get('id'),       # Numeric code for easy plotting
+                'weather_id': data['weather'][0].get('id'),       
                 'condition_main': data['weather'][0].get('main'),
                 'condition_desc': data['weather'][0].get('description')
             }
