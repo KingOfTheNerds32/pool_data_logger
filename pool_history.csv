@@ -9144,3 +9144,4 @@ timestamp,air_temp,pool_temp,spa_temp,pool_set_point,spa_set_point,pool_pump,spa
 2026-05-15 16:55:20,72,84,,97,98,ON,OFF,OFF,OFF,OFF,OFF,OFF,OFF,OFF,OFF,8,absent,,,
 2026-05-15 17:00:24,72,84,,97,98,ON,OFF,OFF,OFF,OFF,OFF,OFF,OFF,OFF,OFF,8,absent,,,
 2026-05-15 17:05:23,72,84,,97,98,ON,OFF,OFF,OFF,OFF,OFF,OFF,OFF,OFF,OFF,8,absent,,,
+2026-05-15 17:10:25,72,,,97,98,OFF,OFF,OFF,OFF,OFF,OFF,OFF,OFF,OFF,OFF,8,absent,,,
